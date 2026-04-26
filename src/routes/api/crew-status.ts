@@ -7,11 +7,13 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import yaml from 'yaml'
 import { BEARER_TOKEN, HERMES_API, ensureGatewayProbed } from '../../server/gateway-capabilities'
+import { readAgentSummary } from '../../server/agent-summaries'
+import { readAgentMetadata } from '../../server/agent-metadata'
 
 type CrewDefinition = {
   id: string
-  displayName: string
-  role: string
+  fallbackDisplayName: string
+  fallbackRole: string
   profilePath: string | null
 }
 
@@ -44,11 +46,11 @@ function buildCrewDefinitions(): CrewDefinition[] {
     : []
 
   return [
-    { id: 'workspace', displayName: 'Workspace', role: 'Primary profile', profilePath: null },
+    { id: 'default', fallbackDisplayName: 'Reddington', fallbackRole: 'Primary profile', profilePath: null },
     ...dynamicProfiles.map((profile) => ({
       id: profile,
-      displayName: titleCase(profile),
-      role: 'Profile',
+      fallbackDisplayName: titleCase(profile),
+      fallbackRole: 'Profile',
       profilePath: profile,
     })),
   ]
@@ -83,6 +85,17 @@ function checkProcessAlive(pid: number | null): boolean {
   } catch {
     return false
   }
+}
+
+function hasConnectedPlatform(platforms: unknown): boolean {
+  if (!platforms || typeof platforms !== 'object') return false
+  return Object.values(platforms as Record<string, { state?: unknown }>).some(
+    (platform) => platform?.state === 'connected',
+  )
+}
+
+function checkOperational(pid: number | null, platforms: unknown): boolean {
+  return checkProcessAlive(pid) || hasConnectedPlatform(platforms)
 }
 
 function readDbStats(hermesHome: string): DbStats {
@@ -186,11 +199,13 @@ function readCronJobCount(hermesHome: string): number {
   if (!existsSync(cronPath)) return 0
   try {
     const jobs = JSON.parse(readFileSync(cronPath, 'utf-8'))
-    return Array.isArray(jobs)
-      ? jobs.length
-      : typeof jobs === 'object' && jobs !== null
-        ? Object.keys(jobs).length
-        : 0
+    if (Array.isArray(jobs)) return jobs.length
+    if (typeof jobs === 'object' && jobs !== null) {
+      const wrappedJobs = (jobs as { jobs?: unknown }).jobs
+      if (Array.isArray(wrappedJobs)) return wrappedJobs.length
+      return Object.keys(jobs).length
+    }
+    return 0
   } catch {
     return 0
   }
@@ -235,11 +250,15 @@ export const Route = createFileRoute('/api/crew-status')({
           const hermesHome = getHermesHome(member.profilePath)
           const profileFound = existsSync(hermesHome)
 
+          const metadata = readAgentMetadata(hermesHome, member.id, member.fallbackRole)
+
           if (!profileFound) {
             return {
               id: member.id,
-              displayName: member.displayName,
-              role: member.role,
+              displayName: metadata.displayName || member.fallbackDisplayName,
+              role: metadata.role || member.fallbackRole,
+              identity: metadata.identity,
+              primaryGoal: metadata.primaryGoal,
               profileFound: false,
               gatewayState: 'unknown',
               processAlive: false,
@@ -255,20 +274,29 @@ export const Route = createFileRoute('/api/crew-status')({
               estimatedCostUsd: null,
               cronJobCount: 0,
               assignedTaskCount: taskCounts[member.id] ?? 0,
+              highlights24h: [],
+              nextActions: [],
+              stalenessWarnings: [],
+              healthChecks: [],
+              lastLoopAt: null,
+              lastSuccessfulLoopAt: null,
             }
           }
 
           const gatewayInfo = readGatewayState(hermesHome)
           const dbStats = readDbStats(hermesHome)
           const config = readConfig(hermesHome)
+          const summary = readAgentSummary(member.profilePath)
 
           return {
             id: member.id,
-            displayName: member.displayName,
-            role: member.role,
+            displayName: metadata.displayName || member.fallbackDisplayName,
+            role: metadata.role || member.fallbackRole,
+            identity: metadata.identity,
+            primaryGoal: metadata.primaryGoal,
             profileFound: true,
             gatewayState: gatewayInfo.gatewayState,
-            processAlive: checkProcessAlive(gatewayInfo.pid),
+            processAlive: checkOperational(gatewayInfo.pid, gatewayInfo.platforms),
             platforms: gatewayInfo.platforms,
             model: config.model,
             provider: config.provider,
@@ -281,6 +309,12 @@ export const Route = createFileRoute('/api/crew-status')({
             estimatedCostUsd: dbStats.estimatedCostUsd,
             cronJobCount: readCronJobCount(hermesHome),
             assignedTaskCount: taskCounts[member.id] ?? 0,
+            highlights24h: summary.highlights24h,
+            nextActions: summary.nextActions,
+            stalenessWarnings: summary.stalenessWarnings,
+            healthChecks: summary.healthChecks,
+            lastLoopAt: summary.lastLoopAt,
+            lastSuccessfulLoopAt: summary.lastSuccessfulLoopAt,
           }
         })
 

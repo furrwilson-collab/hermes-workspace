@@ -57,6 +57,85 @@ function formatUpdatedAgo(fetchedAt: number | null): string {
   return `${Math.floor(diffSec / 60)}m ago`
 }
 
+function statusTone(status: string): string {
+  if (status === 'ok') return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-300'
+  if (status === 'error') return 'border-red-500/20 bg-red-500/10 text-red-300'
+  return 'border-amber-500/20 bg-amber-500/10 text-amber-200'
+}
+
+function BulletList({
+  title,
+  items,
+  emptyLabel,
+}: {
+  title: string
+  items: string[]
+  emptyLabel: string
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted)]">
+        {title}
+      </div>
+      {items.length ? (
+        <ul className="space-y-1.5 text-[11px] text-[var(--theme-text)]">
+          {items.map((item) => (
+            <li key={item} className="flex gap-2 leading-5">
+              <span className="mt-[7px] size-1 rounded-full bg-[#B87333]" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[11px] italic text-[var(--theme-muted)]">{emptyLabel}</p>
+      )}
+    </div>
+  )
+}
+
+function HealthSection({ member }: { member: CrewMember }) {
+  const visibleChecks = member.healthChecks.slice(0, 3)
+  const visibleWarnings = member.stalenessWarnings.slice(0, 2)
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--theme-muted)]">
+        Health
+      </div>
+      {visibleChecks.length ? (
+        <div className="flex flex-wrap gap-1.5">
+          {visibleChecks.map((check) => (
+            <span
+              key={`${check.name}-${check.detail}`}
+              className={cn(
+                'rounded-full border px-2 py-1 text-[10px] font-medium',
+                statusTone(check.status),
+              )}
+              title={check.detail}
+            >
+              {check.name}: {check.detail}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11px] italic text-[var(--theme-muted)]">No health artifact yet.</p>
+      )}
+      {visibleWarnings.length ? (
+        <div className="space-y-1">
+          {visibleWarnings.map((warning) => (
+            <div
+              key={warning}
+              className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1.5 text-[11px] text-amber-100"
+            >
+              {warning}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 // ── Status dot ──────────────────────────────────────────────────────
 
 function StatusDot({ status }: { status: CrewOnlineStatus }) {
@@ -157,6 +236,11 @@ function AgentCard({ member }: { member: CrewMember }) {
           <p className="text-xs text-[var(--theme-muted)] mt-0.5">
             {member.model} · {member.provider}
           </p>
+          {member.primaryGoal && (
+            <p className="mt-2 text-[11px] leading-5 text-[var(--theme-text)]/85">
+              {member.primaryGoal}
+            </p>
+          )}
           {telegramPlatform && (
             <div className="flex items-center gap-1 mt-1">
               <HugeiconsIcon
@@ -220,6 +304,21 @@ function AgentCard({ member }: { member: CrewMember }) {
           <span className="text-[var(--theme-muted)]">
             Tasks: <span className="text-[var(--theme-text)]">{member.assignedTaskCount} assigned</span>
           </span>
+        </div>
+
+        {/* Summary layer */}
+        <div className="grid gap-3">
+          <BulletList
+            title="24h highlights"
+            items={member.highlights24h.slice(0, 3)}
+            emptyLabel="No 24h highlights recorded yet."
+          />
+          <BulletList
+            title="Next 4"
+            items={member.nextActions.slice(0, 4)}
+            emptyLabel="No queued improvement actions yet."
+          />
+          <HealthSection member={member} />
         </div>
 
         {/* Divider */}

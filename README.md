@@ -149,12 +149,24 @@ Example Hermes gateway setup (from scratch):
 # Install hermes-agent via Nous's official installer
 curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
 
-# Configure a provider + start the gateway
+# Configure a provider + start the gateway/API server
 hermes setup
 hermes gateway run
 ```
 
-Our one-liner installer (below) does both steps automatically. If you're using another OpenAI-compatible server, just note its base URL.
+For source-checkout development, you can also start the backend API directly:
+
+```bash
+git clone https://github.com/outsourc-e/hermes-agent.git
+cd hermes-agent
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e .
+pip install 'uvicorn[standard]' 'fastapi[standard]'
+python -m uvicorn webapi.app:app --host 0.0.0.0 --port 8642
+```
+
+Our one-liner installer (below) does setup automatically. If you're using another OpenAI-compatible server, just note its base URL.
 
 ### Step 2: Install & Run Hermes Workspace
 
@@ -243,7 +255,7 @@ Chat works immediately. Sessions, memory, and skills show "Not Available" — th
 
 ### Enhanced Mode (Full Features)
 
-Route through the Hermes gateway for sessions, memory, skills, jobs, and tools.
+Route through the Hermes backend API for sessions, memory, skills, jobs, and tools.
 
 Here are two explicit `~/.hermes/config.yaml` examples for the local providers we support directly in the workspace:
 

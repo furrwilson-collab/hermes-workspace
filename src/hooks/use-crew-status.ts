@@ -6,10 +6,18 @@ export type CrewPlatformInfo = {
   updatedAt: string
 }
 
+export type CrewHealthCheck = {
+  name: string
+  status: 'ok' | 'warn' | 'error' | string
+  detail: string
+}
+
 export type CrewMember = {
   id: string
   displayName: string
   role: string
+  identity: string | null
+  primaryGoal: string | null
   profileFound: boolean
   gatewayState: 'running' | 'stopped' | 'unknown' | string
   processAlive: boolean
@@ -25,6 +33,12 @@ export type CrewMember = {
   estimatedCostUsd: number | null
   cronJobCount: number
   assignedTaskCount: number
+  highlights24h: string[]
+  nextActions: string[]
+  stalenessWarnings: string[]
+  healthChecks: CrewHealthCheck[]
+  lastLoopAt: string | null
+  lastSuccessfulLoopAt: string | null
 }
 
 export type CrewStatus = {
